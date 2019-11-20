@@ -11,24 +11,25 @@ from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-from BlockAttention.multivariable.standrisation import preprocess_df
-from BlockAttention.multivariable.adamw import AdamW
-from BlockAttention.multivariable.cyclic_scheduler import CyclicLRWithRestarts
+# from BlockAttention.multivariable.standrisation import preprocess_df
+from utils.adamw import AdamW
+from utils.cyclic_scheduler import CyclicLRWithRestarts
 
-from Bias_Attention.utils.early_stopping import EarlyStopping
+from utils.early_stopping import EarlyStopping
 
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import mean_squared_error
-from Bias_Attention.utils.metrics import RMSLE
+# from Bias_Attention.utils.metrics import RMSLE
+
+from utils.prepare_PM25 import test_pm25_single_station
 
 # from Dual-Head-SSIM.utils.prepare_PM25 import test_pm25_single_station
-
 
 # from visdom import Visdom
 # from torchnet import meter
 # from BlockAttention.multivariable.visual_loss import Visualizer
 
-from BlockAttention.multivariable.CBAM import BottlenNeck
+# from BlockAttention.multivariable.CBAM import BottlenNeck
 
 # from tensorboardX import SummaryWriter
 # from torch.utils.tensorboard import SummaryWriter
@@ -40,8 +41,8 @@ torch.manual_seed(SEED)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
 ########## Support
+
 
 def init_weights(m):
     for name, param in m.named_parameters():
@@ -102,7 +103,11 @@ def show_attention(input_sentence, output_words, attentions):
     # show_plot_visdom()
 
 
-def series_to_superviesed(x_timeseries, y_timeseries, n_memory_step, n_forcast_step, split=None):
+def series_to_superviesed(x_timeseries,
+                          y_timeseries,
+                          n_memory_step,
+                          n_forcast_step,
+                          split=None):
     '''
         x_timeseries: input time series data, numpy array, (time_step, features)
         y_timeseries: target time series data,  numpy array, (time_step, features)
@@ -110,8 +115,10 @@ def series_to_superviesed(x_timeseries, y_timeseries, n_memory_step, n_forcast_s
         n_forcast_step: number of forcase step in supervised learning, int
         split: portion of data to be used as train set, float, e.g. 0.8
     '''
-    assert len(x_timeseries.shape) == 2, 'x_timeseries must be shape of (time_step, features)'
-    assert len(y_timeseries.shape) == 2, 'y_timeseries must be shape of (time_step, features)'
+    assert len(x_timeseries.shape
+               ) == 2, 'x_timeseries must be shape of (time_step, features)'
+    assert len(y_timeseries.shape
+               ) == 2, 'y_timeseries must be shape of (time_step, features)'
 
     input_step, input_feature = x_timeseries.shape
     output_step, output_feature = y_timeseries.shape
@@ -123,7 +130,8 @@ def series_to_superviesed(x_timeseries, y_timeseries, n_memory_step, n_forcast_s
 
     for n in range(n_RNN_sample):
         RNN_x[n, :, :] = x_timeseries[n:n + n_memory_step, :]
-        RNN_y[n, :, :] = y_timeseries[n + n_memory_step:n + n_memory_step + n_forcast_step, :]
+        RNN_y[n, :, :] = y_timeseries[n + n_memory_step:n + n_memory_step +
+                                      n_forcast_step, :]
     if split != None:
         assert (split <= 0.9) & (split >= 0.1), 'split not in reasonable range'
         return RNN_x[:int(split * len(RNN_x))], RNN_y[:int(split * len(RNN_x))], \
@@ -134,7 +142,6 @@ def series_to_superviesed(x_timeseries, y_timeseries, n_memory_step, n_forcast_s
 
 ########### Dual Head Model
 ########### include left encoder, right encoder
-
 
 # class DualEncoder(nn.Module):
 #     def __init__(self, input_dim, enc_hid_dim, dec_hid_dim, enc_layers, dec_layers, dropout_p):
@@ -200,11 +207,9 @@ def series_to_superviesed(x_timeseries, y_timeseries, n_memory_step, n_forcast_s
 #             return outputs, (hidden, hidden)
 
 
-
-
-
 class Shared_Encoder(nn.Module):
-    def __init__(self, input_dim, enc_hid_dim, dec_hid_dim, enc_layers, dec_layers, dropout_p):
+    def __init__(self, input_dim, enc_hid_dim, dec_hid_dim, enc_layers,
+                 dec_layers, dropout_p):
         super(Shared_Encoder, self).__init__()
 
         self.input_dim = input_dim
@@ -215,66 +220,82 @@ class Shared_Encoder(nn.Module):
         self.dropout_p = dropout_p
 
         self.input_linear = nn.Linear(self.input_dim, self.enc_hid_dim)
-        self.gru = nn.GRU(input_size=self.enc_hid_dim,hidden_size=self.enc_hid_dim,num_layers=self.enc_layers,bidirectional=True)
+        self.gru = nn.GRU(input_size=self.enc_hid_dim,
+                          hidden_size=self.enc_hid_dim,
+                          num_layers=self.enc_layers,
+                          bidirectional=True)
         self.output_linear = nn.Linear(self.enc_hid_dim * 2, self.dec_hid_dim)
         self.dropout = nn.Dropout(self.dropout_p)
 
     def forward(self, input_before, input_after):
-        # print('input')
-        # print(input.size())
+        print('Left input')
+        print(input_before.size())
 
         # Left input
-        embedded_before = self.dropout(torch.tanh(self.input_linear(input_before)))
+        embedded_before = self.dropout(
+            torch.tanh(self.input_linear(input_before)))
 
-        # print('Embedded')
-        # print(embedded.size())
+        print('Embedded Left')
+        print(embedded_before.size())
 
         outputs_before, hidden_before = self.gru(embedded_before)
 
-        # print('Encoder')
-        #
-        # print(outputs)
-        # print(hidden)
-        # print(cell)
+        print('Encoder Left')
 
-        hidden_before = torch.tanh(self.output_linear(torch.cat((hidden_before[-2, :, :], hidden_before[-1, :, :]), dim=1)))
+        print('outputs_before:{}'.format(outputs_before.size()))
+        print('hidden_before:{}'.format(hidden_before.size()))
 
+        hidden_before = torch.tanh(
+            self.output_linear(
+                torch.cat((hidden_before[-2, :, :], hidden_before[-1, :, :]),
+                          dim=1)))
 
+        print('Hidden Left')
 
+        print('hidden_before:{}'.format(hidden_before.size()))
+
+        print('--------------')
 
         # # for different number of decoder layers
         # hidden = hidden.repeat(self.dec_layers, 1, 1)
 
+        print('Right input')
+        print(input_after.size())
 
+        embedded_after = self.dropout(
+            torch.tanh(self.input_linear(input_after)))
 
-        # Right input
-
-        embedded_after = self.dropout(torch.tanh(self.input_linear(input_after)))
-
-        # print('Embedded')
-        # print(embedded.size())
+        print('Embedded Right')
+        print(embedded_after.size())
 
         outputs_after, hidden_after = self.gru(embedded_after)
 
-        # print('Encoder')
-        #
-        # print(outputs)
-        # print(hidden)
-        # print(cell)
+        print('Encoder Right')
 
-        hidden_after = torch.tanh(self.output_linear(torch.cat((hidden_after[-2, :, :], hidden_after[-1, :, :]), dim=1)))
+        print('outputs_after:{}'.format(outputs_after.size()))
+        print('hidden_after:{}'.format(hidden_after.size()))
 
+        hidden_after = torch.tanh(
+            self.output_linear(
+                torch.cat((hidden_after[-2, :, :], hidden_after[-1, :, :]),
+                          dim=1)))
+
+        print('Hidden Right')
+
+        print('hidden_after:{}'.format(hidden_after.size()))
+
+        print('--------------2')
         # # for different number of decoder layers
         # hidden = hidden.repeat(self.dec_layers, 1, 1)
 
+        # Only use hidden before to init decoder GRU
+        print('Init Hidden for Decoder:')
+        hidden_decoder = hidden_before.repeat(self.dec_layers, 1, 1)
+
+        print('hidden_decoder:{}'.format(hidden_decoder.size()))
+
         # return outputs, hidden
-        return outputs_before, hidden_before, outputs_after, hidden_after
-
-
-
-
-
-
+        return outputs_before, outputs_after, hidden_decoder
 
 
 # class Left_Encoder(nn.Module):
@@ -370,43 +391,35 @@ class Cross_Attention(nn.Module):
         self.enc_hid_dim = enc_hid_dim
         self.dec_hid_dim = dec_hid_dim
 
-        self.attn = nn.Linear(self.enc_hid_dim * 2 + self.dec_hid_dim, self.dec_hid_dim)
+        self.attn = nn.Linear(self.enc_hid_dim * 2 + self.dec_hid_dim,
+                              self.dec_hid_dim)
         self.v = nn.Parameter(torch.rand(self.dec_hid_dim))
 
-    def forward(self, hidden, encoder_outputs_left, encoder_outputs_right):
+    def forward(self, hidden, encoder_outputs):
+
+        batch_size = encoder_outputs.shape[1]
+        src_len = encoder_outputs.shape[0]
+
+        print('Decoder Hidden')
+        print(hidden.size())
 
 
-        batch_size = encoder_outputs_left.shape[1]
-        src_len_left = encoder_outputs_left.shape[0]
-        src_len_right = encoder_outputs_right.shape[0]
-        src_len = src_len_left+src_len_right
+        print('Encoder Outputs')
+        print(encoder_outputs.size())
 
-        # print(hidden.size())
-
-
-        # concatenate two outputs
-
-
-
+        print('----------------------------------3')
 
         # only pick up last layer hidden from decoder
         hidden = torch.unbind(hidden, dim=0)[0]
         # hidden = hidden[-1, :, :].squeeze(0)
 
-        # print(hidden.size())
-
         hidden = hidden.unsqueeze(1).repeat(1, src_len, 1)
 
-        # print(hidden.size())
-
-
         # encoder output
-        encoder_outputs_left = encoder_outputs_left.permute(1, 0, 2)
+        # encoder_outputs_left = encoder_outputs_left.permute(1, 0, 2)
         # print(encoder_outputs_left.size())
-        encoder_outputs_right = encoder_outputs_right.permute(1, 0, 2)
+        # encoder_outputs_right = encoder_outputs_right.permute(1, 0, 2)
         # print(encoder_outputs_right.size())
-
-
 
         encoder_outputs = encoder_outputs.permute(1, 0, 2)
 
@@ -414,7 +427,8 @@ class Cross_Attention(nn.Module):
         # print(encoder_outputs.size())
         # print('-----------------')
 
-        energy = torch.tanh(self.attn(torch.cat((hidden, encoder_outputs), dim=2)))
+        energy = torch.tanh(
+            self.attn(torch.cat((hidden, encoder_outputs), dim=2)))
 
         energy = energy.permute(0, 2, 1)
 
@@ -422,20 +436,7 @@ class Cross_Attention(nn.Module):
 
         attention = torch.bmm(v, energy).squeeze(1)
 
-
-
         return F.softmax(attention, dim=1)
-
-
-
-
-
-
-
-
-
-
-
 
 
 # class Encoder(nn.Module):
@@ -478,7 +479,6 @@ class Cross_Attention(nn.Module):
 #         hidden = hidden.repeat(self.dec_layers, 1, 1)
 #
 #         return outputs, (hidden, hidden)
-
 
 # class Attention(nn.Module):
 #     def __init__(self, enc_hid_dim, dec_hid_dim, output_dim):
@@ -555,10 +555,6 @@ class Cross_Attention(nn.Module):
 #
 #         return F.softmax(final_attention, dim=1)
 
-
-
-
-
 # class Global_Attention(nn.Module):
 #     def __init__(self, enc_hid_dim, dec_hid_dim):
 #         super(Global_Attention, self).__init__()
@@ -604,9 +600,9 @@ class Cross_Attention(nn.Module):
 #         return F.softmax(attention, dim=1)
 
 
-
 class Decoder(nn.Module):
-    def __init__(self, output_dim, enc_hid_dim, dec_hid_dim, dec_layers, dropout_p, attention):
+    def __init__(self, output_dim, enc_hid_dim, dec_hid_dim, dec_layers,
+                 dropout_p, attention):
         super(Decoder, self).__init__()
 
         self.enc_hid_dim = enc_hid_dim
@@ -618,37 +614,54 @@ class Decoder(nn.Module):
 
         # self.input_dec = nn.Linear(output_dim, enc_hid_dim)
         self.input_dec = nn.Linear(self.output_dim, self.dec_hid_dim)
-        self.lstm = nn.LSTM(input_size=self.enc_hid_dim * 2 + self.dec_hid_dim, hidden_size=self.dec_hid_dim,
-                            num_layers=self.dec_layers)
-        self.out = nn.Linear(self.enc_hid_dim * 2 + self.dec_hid_dim + self.dec_hid_dim, self.output_dim)
+        # self.lstm = nn.LSTM(input_size=self.enc_hid_dim * 2 + self.dec_hid_dim,
+        #                     hidden_size=self.dec_hid_dim,
+        #                     num_layers=self.dec_layers)
+        self.gru = nn.GRU(input_size=self.enc_hid_dim * 2 + self.dec_hid_dim,
+                          hidden_size=self.dec_hid_dim,
+                          num_layers=self.dec_layers)
+
+        self.out = nn.Linear(
+            self.enc_hid_dim * 2 + self.dec_hid_dim + self.dec_hid_dim,
+            self.output_dim)
         self.dropout = nn.Dropout(self.dropout_p)
 
-    def forward(self, input, hidden, cell, encoder_outputs):
-        # print('Decoder:')
-        # print('input:{}'.format(input.size()))
+    def forward(self, input, hidden, encoder_outputs_left,
+                encoder_outputs_right):
+        print('Decoder:')
+        print('input:{}'.format(input.size()))
 
         input = input.unsqueeze(0)
         input = torch.unsqueeze(input, 2)
 
         embedded = self.dropout(torch.tanh(self.input_dec(input)))
 
-        # print('embedded:{}'.format(embedded))
-
-        # print('Decoder:')
-        # print('embedded:{}'.format(embedded.size()))
+        print('Decoder:')
+        print('embedded:{}'.format(embedded.size()))
 
         # # only pick up last layer hidden
         # hidden = hidden[-1,:,:].squeeze(0)
+
+        # concatenate two outputs
+
+        encoder_outputs = torch.cat(
+            (encoder_outputs_left, encoder_outputs_right), dim=0)
+
+
+
 
         a = self.attention(hidden, encoder_outputs)
 
         a = a.unsqueeze(1)
 
+
+
+
         encoder_outputs = encoder_outputs.permute(1, 0, 2)
 
         weighted = torch.bmm(a, encoder_outputs)
         weighted = weighted.permute(1, 0, 2)
-        lstm_input = torch.cat((embedded, weighted), dim=2)
+        gru_input = torch.cat((embedded, weighted), dim=2)
 
         # print('lstm_input:{}'.format(lstm_input.size()))
 
@@ -661,7 +674,9 @@ class Decoder(nn.Module):
         # # for different number of decoder layers
         # hidden = hidden.repeat(self.dec_layers,1,1)
 
-        output, (hidden, cell) = self.lstm(lstm_input, (hidden, cell))
+        output, hidden = self.gru(gru_input,hidden)
+
+        # output, (hidden, cell) = self.lstm(lstm_input, (hidden, cell))
 
         # assert (output == hidden).all()
 
@@ -678,11 +693,7 @@ class Decoder(nn.Module):
 
         # print('output:{}'.format(output))
 
-        return output.squeeze(1), (hidden, cell), a
-
-
-
-
+        return output.squeeze(1), hidden, a
 
 
 class DualSSIM(nn.Module):
@@ -699,7 +710,8 @@ class DualSSIM(nn.Module):
         batch_size = src_left.shape[1]
         max_len = trg.shape[0]
 
-        outputs = torch.zeros(max_len, batch_size, self.decoder.output_dim).to(self.device)
+        outputs = torch.zeros(max_len, batch_size,
+                              self.decoder.output_dim).to(self.device)
 
         # save attn states
 
@@ -712,11 +724,9 @@ class DualSSIM(nn.Module):
         # print('0')
         # print(src)
 
-        # left input
-        encoder_outputs_left, hidden_left = self.shared_encoder(src_left,src_right)
-
-        # # right input
-        # encoder_outputs_right, hidden_right = self.Shared_Encoder(src_right)
+        # Shared Encoder
+        encoder_outputs_left, encoder_outputs_right, hidden = self.shared_encoder(
+            src_left, src_right)
 
         # only use y initial y
         output = src_left[-1, :, 0]
@@ -732,7 +742,9 @@ class DualSSIM(nn.Module):
             # print('output {} at {}'.format(output,t))
 
             # output, (hidden, cell), attn_weight = self.decoder(output, hidden, cell, encoder_outputs, trg[t])
-            output, hidden, attn_weight = self.decoder(output, hidden, encoder_outputs_left, encoder_outputs_right)
+            output, hidden, attn_weight = self.decoder(output, hidden,
+                                                       encoder_outputs_left,
+                                                       encoder_outputs_right)
 
             # print('2')
             # print(output.size())
@@ -763,10 +775,6 @@ class DualSSIM(nn.Module):
 
         # return outputs, decoder_attn
         return outputs
-
-
-
-
 
 
 # class Seq2Seq(nn.Module):
@@ -863,7 +871,8 @@ def train(model, optimizer, criterion, X_train, y_train):
         x_train_batch = np.take(X_train, batch_idx, axis=0)
         y_train_batch = np.take(y_train, batch_idx, axis=0)
 
-        loss = train_iteration(model, optimizer, criterion, CLIP, WD, x_train_batch, y_train_batch)
+        loss = train_iteration(model, optimizer, criterion, CLIP, WD,
+                               x_train_batch, y_train_batch)
 
         # if t_i % 50 == 0:
         #     print('batch_loss:{}'.format(loss))
@@ -938,6 +947,7 @@ def train_iteration(model, optimizer, criterion, clip, wd, X_train, y_train):
 
 ### evaluate
 
+
 def evaluate(model, criterion, X_test, y_test):
     # model.eval()
 
@@ -945,7 +955,11 @@ def evaluate(model, criterion, X_test, y_test):
     iter_per_epoch = int(np.ceil(X_test.shape[0] * 1. / BATCH_SIZE))
     iter_losses = np.zeros(EPOCHS * iter_per_epoch)
     # other loss: MAE RMSLE
-    iter_multiloss = [np.zeros(EPOCHS * iter_per_epoch), np.zeros(EPOCHS * iter_per_epoch),np.zeros(EPOCHS * iter_per_epoch)]
+    iter_multiloss = [
+        np.zeros(EPOCHS * iter_per_epoch),
+        np.zeros(EPOCHS * iter_per_epoch),
+        np.zeros(EPOCHS * iter_per_epoch)
+    ]
     iter_losses = np.zeros(EPOCHS * iter_per_epoch)
     perm_idx = np.random.permutation(X_test.shape[0])
 
@@ -958,7 +972,8 @@ def evaluate(model, criterion, X_test, y_test):
             x_test_batch = np.take(X_test, batch_idx, axis=0)
             y_test_batch = np.take(y_test, batch_idx, axis=0)
 
-            loss, mae, rmsle, rmse = evaluate_iteration(model, criterion, x_test_batch, y_test_batch)
+            loss, mae, rmsle, rmse = evaluate_iteration(
+                model, criterion, x_test_batch, y_test_batch)
             iter_losses[t_i // BATCH_SIZE] = loss
             iter_multiloss[0][t_i // BATCH_SIZE] = mae
             iter_multiloss[1][t_i // BATCH_SIZE] = rmsle
@@ -969,8 +984,10 @@ def evaluate(model, criterion, X_test, y_test):
 
             n_iter += 1
 
-    return np.mean(iter_losses[range(0, iter_per_epoch)]), np.mean(iter_multiloss[0][range(0, iter_per_epoch)]), np.mean(
-        iter_multiloss[1][range(0, iter_per_epoch)]), np.mean(iter_multiloss[2][range(0, iter_per_epoch)])
+    return np.mean(iter_losses[range(0, iter_per_epoch)]), np.mean(
+        iter_multiloss[0][range(0, iter_per_epoch)]), np.mean(
+            iter_multiloss[1][range(0, iter_per_epoch)]), np.mean(
+                iter_multiloss[2][range(0, iter_per_epoch)])
 
 
 def evaluate_iteration(model, criterion, x_test, y_test):
@@ -1008,12 +1025,9 @@ def evaluate_iteration(model, criterion, x_test, y_test):
     output_numpy = scaler_y.inverse_transform(output_numpy)
     y_test_numpy = scaler_y.inverse_transform(y_test_numpy)
 
-    loss_mae = mean_absolute_error(y_test_numpy,output_numpy)
-    loss_RMSLE = RMSLE(y_test_numpy,output_numpy)
-    loss_RMSE = np.sqrt(mean_squared_error(y_test_numpy,output_numpy))
-
-
-
+    loss_mae = mean_absolute_error(y_test_numpy, output_numpy)
+    loss_RMSLE = RMSLE(y_test_numpy, output_numpy)
+    loss_RMSE = np.sqrt(mean_squared_error(y_test_numpy, output_numpy))
 
     # test_loss_meter.add(loss.item())
 
@@ -1050,8 +1064,8 @@ if __name__ == "__main__":
     filepath = r'C:\Users\ZHA244\Coding\Pytorch_based\BlockAttention\multivariable\newPM.csv'
     df = pd.read_csv(filepath, dayfirst=True)
 
-    X_train, X_test, y_train, y_test, scaler_x, scaler_y = preprocess_df(df, n_memory_steps, n_forcast_steps, test_size,
-                                                                         SEED)
+    X_train, X_test, y_train, y_test, scaler_x, scaler_y = preprocess_df(
+        df, n_memory_steps, n_forcast_steps, test_size, SEED)
 
     print('\nsize of x_train, y_train, x_test, y_test:')
     print(X_train.shape, y_train.shape, X_test.shape, y_test.shape)
@@ -1063,33 +1077,19 @@ if __name__ == "__main__":
     X_test = X_test[:4350, :, :]
     y_test = y_test[:4350, :, :]
 
-
-
     print('split train/test array')
-    X_test_list = np.split(X_test, [5,10] ,axis=1)
-    X_train_list = np.split(X_train, [5,10] ,axis=1)
-
-
-
-
+    X_test_list = np.split(X_test, [5, 10], axis=1)
+    X_train_list = np.split(X_train, [5, 10], axis=1)
 
     # time series to image
 
-
-
-
-
-
-
-
-
-
     # Model
 
-
     cross_attn = Cross_Attention(ENC_HID_DIM, DEC_HID_DIM)
-    enc = Shared_Encoder(INPUT_DIM, ENC_HID_DIM, DEC_HID_DIM, ECN_Layers, DEC_Layers, ENC_DROPOUT)
-    dec = Decoder(OUTPUT_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_Layers, DEC_DROPOUT, cross_attn)
+    enc = Shared_Encoder(INPUT_DIM, ENC_HID_DIM, DEC_HID_DIM, ECN_Layers,
+                         DEC_Layers, ENC_DROPOUT)
+    dec = Decoder(OUTPUT_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_Layers,
+                  DEC_DROPOUT, cross_attn)
 
     model = DualSSIM(enc, dec, device).to(device)
     model.apply(init_weights)
@@ -1102,8 +1102,12 @@ if __name__ == "__main__":
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
     optimizer = AdamW(model.parameters(), lr=1e-2, weight_decay=1e-5)
-    scheduler = CyclicLRWithRestarts(optimizer, BATCH_SIZE, 39400, restart_period=5, t_mult=1.2, policy="cosine")
-
+    scheduler = CyclicLRWithRestarts(optimizer,
+                                     BATCH_SIZE,
+                                     39400,
+                                     restart_period=5,
+                                     t_mult=1.2,
+                                     policy="cosine")
 
     criterion = nn.MSELoss()
 
@@ -1117,21 +1121,17 @@ if __name__ == "__main__":
     # with SummaryWriter(comment='Seq2Seq') as w:
     #     w.add_graph(model, (dummy_input, dummy_output), verbose=False)
 
-
     # # visulization visdom
     # vis = Visualizer(env='attention')
     #
     # loss_meter = meter.AverageValueMeter()
     # test_loss_meter = meter.AverageValueMeter()
 
-
-
     # Early Stopping
     # initialize the early_stopping object
     # early stopping patience; how long to wait after last time validation loss improved.
     patience = 20
     early_stopping = EarlyStopping(patience=patience, verbose=True)
-
 
     best_valid_loss = float('inf')
     for epoch in range(EPOCHS):
@@ -1148,7 +1148,8 @@ if __name__ == "__main__":
 
         start_time = time.time()
         train_loss = train(model, optimizer, criterion, X_train, y_train)
-        valid_loss,_,_,_ = evaluate(model, criterion, X_test, y_test, scaler_x, scaler_y)
+        valid_loss, _, _, _ = evaluate(model, criterion, X_test, y_test,
+                                       scaler_x, scaler_y)
         end_time = time.time()
         #
         # scheduler.step()
@@ -1169,16 +1170,17 @@ if __name__ == "__main__":
             print("Early stopping")
             break
 
-
-
-
         # if valid_loss < best_valid_loss:
         #     best_valid_loss = valid_loss
         #     torch.save(model.state_dict(), 'HPC-model.pt')
 
         print(f'Epoch: {epoch + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
-        print(f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}')
-        print(f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+        print(
+            f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}'
+        )
+        print(
+            f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}'
+        )
 
     # prediction
 

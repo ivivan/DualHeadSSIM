@@ -7,7 +7,7 @@ import math
 import os
 import time
 
-from VLSW import pad_all_cases
+from utils.VLSW import pad_all_cases
 
 # set the random seeds for reproducability
 SEED = 1234
@@ -103,20 +103,20 @@ def test_pm25_single_station():
     train_sampling_params = {
         'dim_in': 11,
         'output_length': 5,
-        'min_before': 5,
-        'max_before': 5,
-        'min_after': 5,
-        'max_after': 5,
+        'min_before': 4,
+        'max_before': 4,
+        'min_after': 6,
+        'max_after': 6,
         'file_path': '../data/simplified_PM25.csv'
     }
 
     test_sampling_params = {
         'dim_in': 11,
         'output_length': 5,
-        'min_before': 5,
-        'max_before': 5,
-        'min_after': 5,
-        'max_after': 5,
+        'min_before': 4,
+        'max_before': 4,
+        'min_after': 6,
+        'max_after': 6,
         'file_path': '../data/simplified_PM25.csv'
     }
 
