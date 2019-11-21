@@ -9,13 +9,11 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 import pandas as pd
 
-from models.DualHead import Shared_Encoder,Cross_Attention,Decoder,DualSSIM
+from models.DualHead import Shared_Encoder, Cross_Attention, Decoder, DualSSIM
 
 from utils.early_stopping import EarlyStopping
 from utils.prepare_PM25 import test_pm25_single_station
 from utils.support import *
-
-
 
 # set the random seeds for reproducability
 SEED = 1234
@@ -24,8 +22,6 @@ torch.manual_seed(SEED)
 torch.backends.cudnn.deterministic = True
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
 
 
 def train(model, optimizer, criterion, X_train_left, X_train_right, y_train):
@@ -47,7 +43,9 @@ def train(model, optimizer, criterion, X_train_left, X_train_right, y_train):
         x_train_right_batch = np.take(X_train_right, batch_idx, axis=0)
         y_train_batch = np.take(y_train, batch_idx, axis=0)
 
-        loss = train_iteration(model, optimizer, criterion, CLIP, x_train_left_batch,x_train_right_batch, y_train_batch)
+        loss = train_iteration(model, optimizer, criterion, CLIP,
+                               x_train_left_batch, x_train_right_batch,
+                               y_train_batch)
 
         iter_losses[t_i // BATCH_SIZE] = loss
 
@@ -56,7 +54,8 @@ def train(model, optimizer, criterion, X_train_left, X_train_right, y_train):
     return np.mean(iter_losses[range(0, iter_per_epoch)])
 
 
-def train_iteration(model, optimizer, criterion, clip, X_train_left, X_train_right, y_train):
+def train_iteration(model, optimizer, criterion, clip, X_train_left,
+                    X_train_right, y_train):
     model.train()
     optimizer.zero_grad()
 
@@ -68,8 +67,7 @@ def train_iteration(model, optimizer, criterion, clip, X_train_left, X_train_rig
     X_train_right_tensor = numpy_to_tvar(X_train_right)
     y_train_tensor = numpy_to_tvar(y_train)
 
-
-    output = model(X_train_left_tensor,X_train_right_tensor, y_train_tensor)
+    output = model(X_train_left_tensor, X_train_right_tensor, y_train_tensor)
 
     output = output.view(-1)
 
@@ -89,6 +87,7 @@ def train_iteration(model, optimizer, criterion, clip, X_train_left, X_train_rig
 
 ### evaluate
 
+
 def evaluate(model, criterion, X_test_left, X_test_right, y_test):
     # model.eval()
 
@@ -107,8 +106,8 @@ def evaluate(model, criterion, X_test_left, X_test_right, y_test):
             x_test_right_batch = np.take(X_test_right, batch_idx, axis=0)
             y_test_batch = np.take(y_test, batch_idx, axis=0)
 
-
-            loss = evaluate_iteration(model, criterion, x_test_left_batch,x_test_right_batch, y_test_batch)
+            loss = evaluate_iteration(model, criterion, x_test_left_batch,
+                                      x_test_right_batch, y_test_batch)
             iter_losses[t_i // BATCH_SIZE] = loss
 
             n_iter += 1
@@ -128,8 +127,7 @@ def evaluate_iteration(model, criterion, X_test_left, X_test_right, y_test):
 
     y_test_tensor = numpy_to_tvar(y_test)
 
-
-    output = model(x_test_left_tensor,x_test_right_tensor, y_test_tensor, 0)
+    output = model(x_test_left_tensor, x_test_right_tensor, y_test_tensor, 0)
 
     output = output.view(-1)
     y_test_tensor = y_test_tensor.view(-1)
@@ -173,8 +171,9 @@ if __name__ == "__main__":
 
     ## Different test data
 
-    (x_train, y_train, x_train_len, x_train_before_len), (
-    x_test, y_test, x_test_len, x_test_before_len) = test_pm25_single_station()
+    (x_train, y_train, x_train_len,
+     x_train_before_len), (x_test, y_test, x_test_len,
+                           x_test_before_len) = test_pm25_single_station()
 
     # print(x_train.shape)
     # print(x_test.shape)
@@ -196,14 +195,12 @@ if __name__ == "__main__":
     print('X_test_left:{}'.format(X_test_left.shape))
     print('X_test_right:{}'.format(X_test_right.shape))
 
-
-
-
-
     # Model
     cross_attn = Cross_Attention(ENC_HID_DIM, DEC_HID_DIM)
-    enc = Shared_Encoder(INPUT_DIM, ENC_HID_DIM, DEC_HID_DIM, ECN_Layers, DEC_Layers, ENC_DROPOUT)
-    dec = Decoder(OUTPUT_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_Layers, DEC_DROPOUT, cross_attn)
+    enc = Shared_Encoder(INPUT_DIM, ENC_HID_DIM, DEC_HID_DIM, ECN_Layers,
+                         DEC_Layers, ENC_DROPOUT)
+    dec = Decoder(OUTPUT_DIM, ENC_HID_DIM, DEC_HID_DIM, DEC_Layers,
+                  DEC_DROPOUT, cross_attn)
 
     model = DualSSIM(enc, dec, device).to(device)
     model.apply(init_weights)
@@ -213,7 +210,9 @@ if __name__ == "__main__":
 
     # Adam
     optimizer = torch.optim.Adam(model.parameters(), lr=LR, betas=(0.9, 0.999))
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
+                                                step_size=10,
+                                                gamma=0.1)
 
     criterion = nn.MSELoss()
 
@@ -226,7 +225,9 @@ if __name__ == "__main__":
     # initialize the early_stopping object
     # early stopping patience; how long to wait after last time validation loss improved.
     patience = 10
-    early_stopping = EarlyStopping(output_path='checkpoints/bestmodel.pt',patience=patience, verbose=True)
+    early_stopping = EarlyStopping(output_path='checkpoints/bestmodel.pt',
+                                   patience=patience,
+                                   verbose=True)
 
     best_valid_loss = float('inf')
     for epoch in range(EPOCHS):
@@ -238,8 +239,10 @@ if __name__ == "__main__":
         print('Epoch:', epoch, 'LR:', scheduler.get_lr())
 
         start_time = time.time()
-        train_loss = train(model, optimizer, criterion, X_train_left, X_train_right, y_train)
-        valid_loss = evaluate(model, criterion, X_test_left, X_test_right, y_test)
+        train_loss = train(model, optimizer, criterion, X_train_left,
+                           X_train_right, y_train)
+        valid_loss = evaluate(model, criterion, X_test_left, X_test_right,
+                              y_test)
         end_time = time.time()
 
         scheduler.step()
@@ -261,8 +264,12 @@ if __name__ == "__main__":
             break
 
         print(f'Epoch: {epoch + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
-        print(f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}')
-        print(f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+        print(
+            f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}'
+        )
+        print(
+            f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}'
+        )
 
     # # prediction
     #
