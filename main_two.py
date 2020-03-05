@@ -23,6 +23,8 @@ from warmup_scheduler import GradualWarmupScheduler
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import mean_squared_error
 
+from tslearn.metrics import dtw, dtw_path
+
 # set the random seeds for reproducability
 SEED = 1234
 random.seed(SEED)
@@ -81,16 +83,18 @@ def train_iteration(model, optimizer, criterion, clip, X_train_left,
 
     # y_train_tensor = y_train_tensor.view(-1)
 
-    print(output.size())
-    print(y_train_tensor.size())
+
+
+    output = output.permute(1,0,2)
+    y_train_tensor = y_train_tensor.permute(1,0,2)
 
     loss_mse,loss_shape,loss_temporal = torch.tensor(0),torch.tensor(0),torch.tensor(0)
 
-    loss, loss_shape, loss_temporal = dilate_loss(y_train_tensor,output,1, 0.01, device)         
+    loss, loss_shape, loss_temporal = dilate_loss(y_train_tensor,output,0.85, 0.01, device)         
 
     # loss = criterion(output, y_train_tensor)
 
-    print(loss.size())
+    # print(loss.size())
 
     loss.backward()
     torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
@@ -156,32 +160,60 @@ def evaluate_iteration(model, criterion, X_test_left, X_test_right, y_test):
     # output = output.view(-1)
     # y_test_tensor = y_test_tensor.view(-1)
 
-    loss_mse,loss_shape,loss_temporal = torch.tensor(0),torch.tensor(0),torch.tensor(0)
-
-    loss, loss_shape, loss_temporal = dilate_loss(y_test_tensor,output,1, 0.01, device)           
-
-    # loss = criterion(output, y_test_tensor)
 
 
-    # metric
-    output_numpy = output.cpu().data.numpy()
-    y_test_numpy = y_test_tensor.cpu().data.numpy()
+    loss = criterion(output, y_test_tensor)
+    loss_mse, loss_dtw, loss_tdi  = torch.tensor(0),torch.tensor(0),torch.tensor(0)
+    loss_mae, loss_RMSLE, loss_RMSE = 0,0,0
+
+    for k in range(BATCH_SIZE):         
+        target_k_cpu = y_test_tensor[:,k,0:1].view(-1).detach().cpu().numpy()
+        output_k_cpu = output[:,k,0:1].view(-1).detach().cpu().numpy()
 
 
 
-    # output_numpy = scaler_y.inverse_transform(output_numpy)
-    # y_test_numpy = scaler_y.inverse_transform(y_test_numpy)
+        loss_dtw += dtw(target_k_cpu,output_k_cpu)
+        path, sim = dtw_path(target_k_cpu, output_k_cpu)   
+                    
+        Dist = 0
+        for i,j in path:
+                Dist += (i-j)*(i-j)
+        loss_tdi += Dist / (N_output*N_output)
 
-    loss_mae = mean_absolute_error(y_test_numpy,output_numpy)
-    loss_RMSLE = np.sqrt(mean_squared_error(y_test_numpy,output_numpy))
-    loss_RMSE = np.sqrt(mean_squared_error(y_test_numpy,output_numpy))
+
+        loss_mae += mean_absolute_error(target_k_cpu,output_k_cpu)
+        loss_RMSLE += np.sqrt(mean_squared_error(target_k_cpu,output_k_cpu))
+        loss_RMSE += np.sqrt(mean_squared_error(target_k_cpu,output_k_cpu))
+
+
+                    
+    loss_dtw = loss_dtw / BATCH_SIZE
+    loss_tdi = loss_tdi / BATCH_SIZE
+    loss_mae = loss_mae / BATCH_SIZE
+    loss_RMSLE = loss_RMSLE / BATCH_SIZE
+    loss_RMSE = loss_RMSE / BATCH_SIZE
+
+
+
+
+
+
+
+    # # metric
+    # output_numpy = output.cpu().data.numpy()
+    # y_test_numpy = y_test_tensor.cpu().data.numpy()
+
+
+    # loss_mae = mean_absolute_error(y_test_numpy,output_numpy)
+    # loss_RMSLE = np.sqrt(mean_squared_error(y_test_numpy,output_numpy))
+    # loss_RMSE = np.sqrt(mean_squared_error(y_test_numpy,output_numpy))
 
 
     # test_loss_meter.add(loss.item())
 
-    plot_result(output, y_test_tensor)
-    show_attention(x_test_left_tensor, x_test_right_tensor,output,atten)
-    plt.show()
+    # plot_result(output, y_test_tensor)
+    # show_attention(x_test_left_tensor, x_test_right_tensor,output,atten)
+    # plt.show()
 
     return loss.item(), loss_mae, loss_RMSLE, loss_RMSE
 
@@ -230,6 +262,7 @@ if __name__ == "__main__":
     CLIP = 1
     EPOCHS = 500
     BATCH_SIZE = 20
+    N_output=6
 
 
 
@@ -255,11 +288,11 @@ if __name__ == "__main__":
     print('X_test_left:{}'.format(X_test_left.shape))
     print('X_test_right:{}'.format(X_test_right.shape))
 
-    # # fit for batchsize  check dataloader droplast
-    # X_train_left = X_train_left[:3200]
-    # X_train_right = X_train_right[:3200]
-    # X_test_left = X_test_left[:680]
-    # X_test_right = X_test_right[:680]
+    # fit for batchsize  check dataloader droplast
+    X_train_left = X_train_left[:3200]
+    X_train_right = X_train_right[:3200]
+    X_test_left = X_test_left[:680]
+    X_test_right = X_test_right[:680]
 
 
 
@@ -307,22 +340,22 @@ if __name__ == "__main__":
                                    patience=patience,
                                    verbose=True)
 
-    best_valid_loss = float('inf')
-    for epoch in range(EPOCHS):
+    # best_valid_loss = float('inf')
+    # for epoch in range(EPOCHS):
 
-        scheduler_warmup.step()
-        train_epoch_losses = np.zeros(EPOCHS)
-        evaluate_epoch_losses = np.zeros(EPOCHS)
-        # loss_meter.reset()
+    #     scheduler_warmup.step()
+    #     train_epoch_losses = np.zeros(EPOCHS)
+    #     evaluate_epoch_losses = np.zeros(EPOCHS)
+    #     # loss_meter.reset()
 
-        # print('Epoch:', epoch, 'LR:', scheduler.get_lr())
+    #     # print('Epoch:', epoch, 'LR:', scheduler.get_lr())
 
-        start_time = time.time()
-        train_loss = train(model, optimizer, criterion, X_train_left,
-                           X_train_right, y_train)
-        valid_loss,test_mae, test_rmsle, test_rmse = evaluate(model, criterion, X_test_left, X_test_right,
-                              y_test)
-        end_time = time.time()
+    #     start_time = time.time()
+    #     train_loss = train(model, optimizer, criterion, X_train_left,
+    #                        X_train_right, y_train)
+    #     valid_loss,test_mae, test_rmsle, test_rmse = evaluate(model, criterion, X_test_left, X_test_right,
+    #                           y_test)
+    #     end_time = time.time()
 
         
 
@@ -360,15 +393,15 @@ if __name__ == "__main__":
     # X_test_right = X_test_right[5:6,:,:]
     # y_test = y_test[5:6,:,:]
     
-    # model.load_state_dict(torch.load('checkpoints/bestmodel.pt'))
+    model.load_state_dict(torch.load('checkpoints/bestmodel.pt'))
     
-    # test_loss, test_mae, test_rmsle, test_rmse  = evaluate(model, criterion, X_test_left,X_test_right, y_test)
+    test_loss, test_mae, test_rmsle, test_rmse  = evaluate(model, criterion, X_test_left,X_test_right, y_test)
     
     
-    # print(f'| Test Loss: {test_loss:.4f} | Test PPL: {math.exp(test_loss):7.4f} |')
-    # print(f'| MAE: {test_mae:.4f} | Test PPL: {math.exp(test_mae):7.4f} |')
-    # print(f'| RMSLE: {test_rmsle:.4f} | Test PPL: {math.exp(test_rmsle):7.4f} |')
-    # print(f'| RMSE: {test_rmse:.4f} | Test PPL: {math.exp(test_rmse):7.4f} |')
+    print(f'| Test Loss: {test_loss:.4f} | Test PPL: {math.exp(test_loss):7.4f} |')
+    print(f'| MAE: {test_mae:.4f} | Test PPL: {math.exp(test_mae):7.4f} |')
+    print(f'| RMSLE: {test_rmsle:.4f} | Test PPL: {math.exp(test_rmsle):7.4f} |')
+    print(f'| RMSE: {test_rmse:.4f} | Test PPL: {math.exp(test_rmse):7.4f} |')
 
 
 
