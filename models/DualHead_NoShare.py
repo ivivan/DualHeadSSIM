@@ -301,7 +301,7 @@ class DualSSIM(nn.Module):
                               self.decoder.output_dim).to(self.device)
 
         # save attn states
-        decoder_attn = torch.zeros(max_len, batch_size, 24).to(self.device)
+        decoder_attn = torch.zeros(max_len, batch_size, 20).to(self.device)
 
         # Shared Encoder
         encoder_outputs_left, encoder_outputs_right, hidden = self.shared_encoder(

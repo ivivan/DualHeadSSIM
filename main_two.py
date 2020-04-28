@@ -4,6 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 import random, math, os, time
+from torch.optim.lr_scheduler import StepLR, ExponentialLR
 
 import numpy as np
 np.set_printoptions(threshold=np.inf)
@@ -12,7 +13,7 @@ import pandas as pd
 from models.DualHead_NoShare import Shared_Encoder, Cross_Attention, Decoder, DualSSIM
 
 from utils.early_stopping import EarlyStopping
-from utils.prepare_IOWA_2Y import test_pm25_single_station
+from utils.prepare_QLD import test_qld_single_station
 from utils.support import *
 from utils.metrics import RMSLE
 
@@ -117,7 +118,7 @@ def evaluate(model, criterion, X_test_left, X_test_right, y_test):
     epoch_loss = 0
     iter_per_epoch = int(np.ceil(X_test_left.shape[0] * 1. / BATCH_SIZE))
     iter_losses = np.zeros(EPOCHS * iter_per_epoch)
-    iter_multiloss = [np.zeros(EPOCHS * iter_per_epoch), np.zeros(EPOCHS * iter_per_epoch),np.zeros(EPOCHS * iter_per_epoch)]
+    iter_multiloss = [np.zeros(EPOCHS * iter_per_epoch), np.zeros(EPOCHS * iter_per_epoch),np.zeros(EPOCHS * iter_per_epoch),np.zeros(EPOCHS * iter_per_epoch)]
     perm_idx = np.random.permutation(X_test_left.shape[0])
 
     n_iter = 0
@@ -130,17 +131,18 @@ def evaluate(model, criterion, X_test_left, X_test_right, y_test):
             x_test_right_batch = np.take(X_test_right, batch_idx, axis=0)
             y_test_batch = np.take(y_test, batch_idx, axis=0)
 
-            loss, mae, rmsle, rmse = evaluate_iteration(model, criterion, x_test_left_batch,
+            loss, mae, rmsle, rmse, loss_tdi = evaluate_iteration(model, criterion, x_test_left_batch,
                                       x_test_right_batch, y_test_batch)
             iter_losses[t_i // BATCH_SIZE] = loss
             iter_multiloss[0][t_i // BATCH_SIZE] = mae
             iter_multiloss[1][t_i // BATCH_SIZE] = rmsle
             iter_multiloss[2][t_i // BATCH_SIZE] = rmse
+            iter_multiloss[3][t_i // BATCH_SIZE] = loss_tdi
 
             n_iter += 1
 
     return np.mean(iter_losses[range(0, iter_per_epoch)]), np.mean(iter_multiloss[0][range(0, iter_per_epoch)]), np.mean(
-        iter_multiloss[1][range(0, iter_per_epoch)]), np.mean(iter_multiloss[2][range(0, iter_per_epoch)])
+        iter_multiloss[1][range(0, iter_per_epoch)]), np.mean(iter_multiloss[2][range(0, iter_per_epoch)]),np.mean(iter_multiloss[3][range(0, iter_per_epoch)])
 
 
 def evaluate_iteration(model, criterion, X_test_left, X_test_right, y_test):
@@ -163,7 +165,7 @@ def evaluate_iteration(model, criterion, X_test_left, X_test_right, y_test):
 
 
     loss = criterion(output, y_test_tensor)
-    loss_mse, loss_dtw, loss_tdi  = torch.tensor(0),torch.tensor(0),torch.tensor(0)
+    loss_mse, loss_dtw, loss_tdi  = 0,0,0
     loss_mae, loss_RMSLE, loss_RMSE = 0,0,0
 
     for k in range(BATCH_SIZE):         
@@ -215,7 +217,7 @@ def evaluate_iteration(model, criterion, X_test_left, X_test_right, y_test):
     # show_attention(x_test_left_tensor, x_test_right_tensor,output,atten)
     # plt.show()
 
-    return loss.item(), loss_mae, loss_RMSLE, loss_RMSE
+    return loss.item(), loss_mae, loss_RMSLE, loss_RMSE, loss_dtw
 
 
 def predict_ts(model, X_test_left, X_test_right, scaler_y, max_gap_size=6, BATCH_SIZE=1,device=device):
@@ -250,31 +252,31 @@ def predict_ts(model, X_test_left, X_test_right, scaler_y, max_gap_size=6, BATCH
 if __name__ == "__main__":
 
     # model hyperparameters
-    INPUT_DIM = 5
+    INPUT_DIM = 6
     OUTPUT_DIM = 1
     ENC_HID_DIM = 50
     DEC_HID_DIM = 50
-    ENC_DROPOUT = 0
-    DEC_DROPOUT = 0
+    ENC_DROPOUT = 0.1
+    DEC_DROPOUT = 0.1
     ECN_Layers = 1
     DEC_Layers = 1
     LR = 0.001  # learning rate
     CLIP = 1
     EPOCHS = 500
-    BATCH_SIZE = 20
-    N_output=6
+    BATCH_SIZE = 10
+    N_output=3
 
 
 
     ## Different test data
 
-    (x_train, y_train), (x_test, y_test), (scaler_x, scaler_y) = test_pm25_single_station()
+    (x_train, y_train), (x_test, y_test), (scaler_x, scaler_y) = test_qld_single_station()
 
 
 
     print('split train/test array')
-    x_test_list = np.split(x_test, [12, 18], axis=1)
-    x_train_list = np.split(x_train, [12, 18], axis=1)
+    x_test_list = np.split(x_test, [10, 13], axis=1)
+    x_train_list = np.split(x_train, [10, 13], axis=1)
 
     # Split input into two
 
@@ -289,10 +291,10 @@ if __name__ == "__main__":
     print('X_test_right:{}'.format(X_test_right.shape))
 
     # fit for batchsize  check dataloader droplast
-    X_train_left = X_train_left[:3200]
-    X_train_right = X_train_right[:3200]
-    X_test_left = X_test_left[:680]
-    X_test_right = X_test_right[:680]
+    X_train_left = X_train_left[:4930]
+    X_train_right = X_train_right[:4930]
+    X_test_left = X_test_left[:1600]
+    X_test_right = X_test_right[:1600]
 
 
 
@@ -319,8 +321,9 @@ if __name__ == "__main__":
     # scheduler = CyclicLRWithRestarts(optimizer, BATCH_SIZE, 3202, restart_period=5, t_mult=1.2, policy="cosine")
 
     # warmup
-    scheduler_cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, EPOCHS)
-    scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=8, total_epoch=10, after_scheduler=scheduler_cosine)
+    # scheduler_cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, EPOCHS)
+    scheduler_steplr = StepLR(optimizer, step_size=10, gamma=0.1)
+    scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=5)
 
     criterion = nn.MSELoss()
 
@@ -336,14 +339,17 @@ if __name__ == "__main__":
     # initialize the early_stopping object
     # early stopping patience; how long to wait after last time validation loss improved.
     patience = 10
-    early_stopping = EarlyStopping(output_path='checkpoints/bestmodel.pt',
+    early_stopping = EarlyStopping(output_path='checkpoints/level3_0103.pt',
                                    patience=patience,
                                    verbose=True)
+
+    optimizer.zero_grad()
+    optimizer.step()
 
     # best_valid_loss = float('inf')
     # for epoch in range(EPOCHS):
 
-    #     scheduler_warmup.step()
+    #     scheduler_warmup.step(epoch)
     #     train_epoch_losses = np.zeros(EPOCHS)
     #     evaluate_epoch_losses = np.zeros(EPOCHS)
     #     # loss_meter.reset()
@@ -353,7 +359,7 @@ if __name__ == "__main__":
     #     start_time = time.time()
     #     train_loss = train(model, optimizer, criterion, X_train_left,
     #                        X_train_right, y_train)
-    #     valid_loss,test_mae, test_rmsle, test_rmse = evaluate(model, criterion, X_test_left, X_test_right,
+    #     valid_loss,test_mae, test_rmsle, test_rmse, test_tdi = evaluate(model, criterion, X_test_left, X_test_right,
     #                           y_test)
     #     end_time = time.time()
 
@@ -385,6 +391,7 @@ if __name__ == "__main__":
     #     print(f'| MAE: {test_mae:.4f} | Test PPL: {math.exp(test_mae):7.4f} |')
     #     print(f'| RMSLE: {test_rmsle:.4f} | Test PPL: {math.exp(test_rmsle):7.4f} |')
     #     print(f'| RMSE: {test_rmse:.4f} | Test PPL: {math.exp(test_rmse):7.4f} |')
+    #     print(f'| TDI: {test_tdi:.4f} | Test PPL: {math.exp(test_tdi):7.4f} |')
 
     # # # prediction
 
@@ -392,16 +399,22 @@ if __name__ == "__main__":
     # X_test_left = X_test_left[5:6,:,:]
     # X_test_right = X_test_right[5:6,:,:]
     # y_test = y_test[5:6,:,:]
+
+
+    #######
     
-    model.load_state_dict(torch.load('checkpoints/bestmodel.pt'))
+    model.load_state_dict(torch.load('checkpoints/level3_0103.pt'))
     
-    test_loss, test_mae, test_rmsle, test_rmse  = evaluate(model, criterion, X_test_left,X_test_right, y_test)
+    test_loss, test_mae, test_rmsle, test_rmse, test_tdi  = evaluate(model, criterion, X_test_left,X_test_right, y_test)
     
     
     print(f'| Test Loss: {test_loss:.4f} | Test PPL: {math.exp(test_loss):7.4f} |')
     print(f'| MAE: {test_mae:.4f} | Test PPL: {math.exp(test_mae):7.4f} |')
     print(f'| RMSLE: {test_rmsle:.4f} | Test PPL: {math.exp(test_rmsle):7.4f} |')
     print(f'| RMSE: {test_rmse:.4f} | Test PPL: {math.exp(test_rmse):7.4f} |')
+    print(f'| DTW: {test_tdi:.4f} | Test PPL: {math.exp(test_tdi):7.4f} |')
+
+    ##########
 
 
 
