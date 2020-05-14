@@ -39,8 +39,8 @@ def preprocess_df(df):
     # 6，7, 8, 9，10 as train; 11 as test
 
 
-    df_train_one = do.loc['2019-01-01T00:00':'2019-09-30T23:00'].copy()
-    df_test_one = do.loc['2019-10-01T00:00':'2019-12-31T23:00'].copy()
+    df_train_one = do.loc['2019-04-01T00:00':'2019-12-31T23:00'].copy()
+    df_test_one = do.loc['2019-01-01T00:00':'2019-03-31T23:00'].copy()
 
 
 
@@ -116,7 +116,7 @@ def train_test_split_SSIM(x, y, x_len, x_before_len, model_params, SEED):
 def test_qld_single_station():
     train_sampling_params = {
         'dim_in': 1,
-        'output_length': 3,
+        'output_length': 6,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -126,7 +126,7 @@ def test_qld_single_station():
 
     test_sampling_params = {
         'dim_in': 1,
-        'output_length': 3,
+        'output_length': 6,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -415,7 +415,7 @@ def generate_dicts(eval_list, eval_mask_list, value_list, masks_list,
 if __name__ == "__main__":
     train_sampling_params = {
         'dim_in': 1,
-        'output_length': 3,
+        'output_length': 6,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -425,7 +425,7 @@ if __name__ == "__main__":
 
     test_sampling_params = {
         'dim_in': 1,
-        'output_length': 3,
+        'output_length': 6,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -628,9 +628,9 @@ if __name__ == "__main__":
     # sample_list_all = sample_list_train + sample_list_test
 
     # generate train/test datasets seperately
-    with open('Level_train1012.json', 'w') as fp:
+    with open('Level_6train0103.json', 'w') as fp:
         fp.write('\n'.join(json.dumps(i) for i in sample_list_train))
-    with open('Level_test1012.json', 'w') as fp:
+    with open('Level_6test0103.json', 'w') as fp:
         fp.write('\n'.join(json.dumps(i) for i in sample_list_test))
 
     # print('split train/test array')
