@@ -214,8 +214,8 @@ def evaluate_iteration(model, criterion, X_test_left, X_test_right, y_test):
     # test_loss_meter.add(loss.item())
 
     # plot_result(output, y_test_tensor)
-    # show_attention(x_test_left_tensor, x_test_right_tensor,output,atten)
-    # plt.show()
+    show_attention(x_test_left_tensor, x_test_right_tensor,output,atten)
+    plt.show()
 
     return loss.item(), loss_mae, loss_RMSLE, loss_RMSE, loss_dtw
 
@@ -263,7 +263,7 @@ if __name__ == "__main__":
     LR = 0.001  # learning rate
     CLIP = 1
     EPOCHS = 500
-    BATCH_SIZE = 10
+    BATCH_SIZE = 1
     N_output=3
 
 
@@ -291,10 +291,10 @@ if __name__ == "__main__":
     print('X_test_right:{}'.format(X_test_right.shape))
 
     # fit for batchsize  check dataloader droplast
-    X_train_left = X_train_left[:4930]
-    X_train_right = X_train_right[:4930]
-    X_test_left = X_test_left[:1600]
-    X_test_right = X_test_right[:1600]
+    X_train_left = X_train_left[:4890]
+    X_train_right = X_train_right[:4890]
+    X_test_left = X_test_left[:1630]
+    X_test_right = X_test_right[:1630]
 
 
 
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     # initialize the early_stopping object
     # early stopping patience; how long to wait after last time validation loss improved.
     patience = 10
-    early_stopping = EarlyStopping(output_path='checkpoints/level3_0103.pt',
+    early_stopping = EarlyStopping(output_path='checkpoints/Nitrate6_0103.pt',
                                    patience=patience,
                                    verbose=True)
 
@@ -403,7 +403,7 @@ if __name__ == "__main__":
 
     #######
     
-    model.load_state_dict(torch.load('checkpoints/level3_0103.pt'))
+    model.load_state_dict(torch.load('checkpoints/Nitrate3_1012.pt'))
     
     test_loss, test_mae, test_rmsle, test_rmse, test_tdi  = evaluate(model, criterion, X_test_left,X_test_right, y_test)
     
