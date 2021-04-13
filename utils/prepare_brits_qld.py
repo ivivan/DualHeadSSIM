@@ -25,24 +25,25 @@ def preprocess_df(df):
     df.set_index('Timestamp', inplace=True)
 
     # single input/output   DO or Nitrate
-    do = df[['Level']]
+    do = df[['NO3']]
 
     ## some variables are not used in training the model, based on the performance evaluation
 
     # Standlization, use StandardScaler
     scaler_x = MinMaxScaler()
-    scaler_x.fit(do['Level'].values.reshape(-1, 1))
-    do['Level'] = scaler_x.transform(do['Level'].values.reshape(
+    scaler_x.fit(do['NO3'].values.reshape(-1, 1))
+    do['NO3'] = scaler_x.transform(do['NO3'].values.reshape(
         -1, 1))
 
     # get data from 2014 and 2015
     # 6，7, 8, 9，10 as train; 11 as test
 
 
-    df_train_one = do.loc['2019-04-01T00:00':'2019-12-31T23:00'].copy()
-    df_test_one = do.loc['2019-01-01T00:00':'2019-03-31T23:00'].copy()
+    # df_train_one = do.loc['2019-04-01T00:00':'2019-12-31T23:00'].copy()
+    # df_test_one = do.loc['2019-01-01T00:00':'2019-03-31T23:00'].copy()
 
-
+    df_train_one = do.loc['2019-01-01T00:00':'2019-09-30T23:00'].copy()
+    df_test_one = do.loc['2019-10-01T00:00':'2019-12-31T23:00'].copy()
 
     # df_train_one = do.loc['2014-06-01T00:00':'2014-10-31T23:30'].copy()
     # df_train_two = do.loc['2015-06-01T00:00':'2015-10-31T23:30'].copy()
@@ -63,7 +64,7 @@ def train_val_test_generate(dataframe, model_params):
     '''
 
     train_val_test_x, train_val_test_y, len_x_samples, len_before_x_samples = pad_all_cases(
-        dataframe, dataframe['Level'].values, model_params,
+        dataframe, dataframe['NO3'].values, model_params,
         model_params['min_before'], model_params['max_before'],
         model_params['min_after'], model_params['max_after'],
         model_params['output_length'])
@@ -94,29 +95,30 @@ def train_test_split_SSIM(x, y, x_len, x_before_len, model_params, SEED):
     x_len = np.delete(x_len, index_list, axis=0)
     x_before_len = np.delete(x_before_len, index_list, axis=0)
 
-    x_train, x_test, y_train, y_test = train_test_split(x,
-                                                        y,
-                                                        test_size=None,
-                                                        random_state=SEED,
-                                                        shuffle=False)
+    # x_train, x_test, y_train, y_test = train_test_split(x,
+    #                                                     y,
+    #                                                     test_size=None,
+    #                                                     random_state=SEED,
+    #                                                     shuffle=False)
 
-    x_train_len, x_test_len = train_test_split(x_len,
-                                               test_size=None,
-                                               random_state=SEED,
-                                               shuffle=False)
+    # x_train_len, x_test_len = train_test_split(x_len,
+    #                                            test_size=None,
+    #                                            random_state=SEED,
+    #                                            shuffle=False)
 
-    x_train_before_len, x_test_before_len = train_test_split(x_before_len,
-                                                             test_size=None,
-                                                             random_state=SEED,
-                                                             shuffle=False)
+    # x_train_before_len, x_test_before_len = train_test_split(x_before_len,
+    #                                                          test_size=None,
+    #                                                          random_state=SEED,
+    #                                                          shuffle=False)
 
-    return x_train, y_train, x_train_len, x_train_before_len
+    # return x_train, y_train, x_train_len, x_train_before_len
+    return x, y, x_len, x_before_len
 
 
 def test_qld_single_station():
     train_sampling_params = {
         'dim_in': 1,
-        'output_length': 6,
+        'output_length': 3,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -126,7 +128,7 @@ def test_qld_single_station():
 
     test_sampling_params = {
         'dim_in': 1,
-        'output_length': 6,
+        'output_length': 3,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -415,7 +417,7 @@ def generate_dicts(eval_list, eval_mask_list, value_list, masks_list,
 if __name__ == "__main__":
     train_sampling_params = {
         'dim_in': 1,
-        'output_length': 6,
+        'output_length': 3,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -425,7 +427,7 @@ if __name__ == "__main__":
 
     test_sampling_params = {
         'dim_in': 1,
-        'output_length': 6,
+        'output_length': 3,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -628,9 +630,9 @@ if __name__ == "__main__":
     # sample_list_all = sample_list_train + sample_list_test
 
     # generate train/test datasets seperately
-    with open('Level_6train0103.json', 'w') as fp:
+    with open('Nitrate_3train1012.json', 'w') as fp:
         fp.write('\n'.join(json.dumps(i) for i in sample_list_train))
-    with open('Level_6test0103.json', 'w') as fp:
+    with open('Nitrate_3test1012.json', 'w') as fp:
         fp.write('\n'.join(json.dumps(i) for i in sample_list_test))
 
     # print('split train/test array')

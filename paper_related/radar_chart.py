@@ -90,73 +90,25 @@ def radar_factory(num_vars, frame='circle'):
 
 
 def example_data():
-    # The following data is from the Denver Aerosol Sources and Health study.
-    # See doi:10.1016/j.atmosenv.2008.12.017
-    #
-    # The data are pollution source profile estimates for five modeled
-    # pollution sources (e.g., cars, wood-burning, etc) that emit 7-9 chemical
-    # species. The radar charts are experimented with here to see if we can
-    # nicely visualize how the modeled source profiles change across four
-    # scenarios:
-    #  1) No gas-phase species present, just seven particulate counts on
-    #     Sulfate
-    #     Nitrate
-    #     Elemental Carbon (EC)
-    #     Organic Carbon fraction 1 (OC)
-    #     Organic Carbon fraction 2 (OC2)
-    #     Organic Carbon fraction 3 (OC3)
-    #     Pyrolized Organic Carbon (OP)
-    #  2)Inclusion of gas-phase specie carbon monoxide (CO)
-    #  3)Inclusion of gas-phase specie ozone (O3).
-    #  4)Inclusion of both gas-phase species is present...
-    # data = [
-    #     ['Sulfate', 'Nitrate', 'EC', 'OC1', 'OC2', 'OC3', 'OP', 'CO', 'O3'],
-    #     ('Basecase', [
-    #         [0.88, 0.01, 0.03, 0.03, 0.00, 0.06, 0.01, 0.00, 0.00],
-    #         [0.07, 0.95, 0.04, 0.05, 0.00, 0.02, 0.01, 0.00, 0.00],
-    #         [0.01, 0.02, 0.85, 0.19, 0.05, 0.10, 0.00, 0.00, 0.00],
-    #         [0.02, 0.01, 0.07, 0.01, 0.21, 0.12, 0.98, 0.00, 0.00],
-    #         [0.01, 0.01, 0.02, 0.71, 0.74, 0.70, 0.00, 0.00, 0.00]]),
-    #     ('With CO', [
-    #         [0.88, 0.02, 0.02, 0.02, 0.00, 0.05, 0.00, 0.05, 0.00],
-    #         [0.08, 0.94, 0.04, 0.02, 0.00, 0.01, 0.12, 0.04, 0.00],
-    #         [0.01, 0.01, 0.79, 0.10, 0.00, 0.05, 0.00, 0.31, 0.00],
-    #         [0.00, 0.02, 0.03, 0.38, 0.31, 0.31, 0.00, 0.59, 0.00],
-    #         [0.02, 0.02, 0.11, 0.47, 0.69, 0.58, 0.88, 0.00, 0.00]]),
-    #     ('With O3', [
-    #         [0.89, 0.01, 0.07, 0.00, 0.00, 0.05, 0.00, 0.00, 0.03],
-    #         [0.07, 0.95, 0.05, 0.04, 0.00, 0.02, 0.12, 0.00, 0.00],
-    #         [0.01, 0.02, 0.86, 0.27, 0.16, 0.19, 0.00, 0.00, 0.00],
-    #         [0.01, 0.03, 0.00, 0.32, 0.29, 0.27, 0.00, 0.00, 0.95],
-    #         [0.02, 0.00, 0.03, 0.37, 0.56, 0.47, 0.87, 0.00, 0.00]]),
-    #     ('CO & O3', [
-    #         [0.87, 0.01, 0.08, 0.00, 0.00, 0.04, 0.00, 0.00, 0.01],
-    #         [0.09, 0.95, 0.02, 0.03, 0.00, 0.01, 0.13, 0.06, 0.00],
-    #         [0.01, 0.02, 0.71, 0.24, 0.13, 0.16, 0.00, 0.50, 0.00],
-    #         [0.01, 0.03, 0.00, 0.28, 0.24, 0.23, 0.00, 0.44, 0.88],
-    #         [0.02, 0.00, 0.18, 0.45, 0.64, 0.55, 0.86, 0.00, 0.16]])
-    # ]
-    # return data
-
 
     data = [
-    ['SSIM', 'BRITS', 'M-RNN', 'EM', 'KNN'],
-    ('Water Level (gap size 3)', [
-        [2.0, 3.5, 9.9, 17.5, 19.8],
-        [2.2, 3.0, 9.5, 15.6, 19.2],
-        [1.8, 12.2, 10.2, 14.6, 17.1]]),
-    ('Water Level (gap size 6)', [
-        [1.2, 3.7, 7.5, 9.6, 15.9],
-        [1.3, 3.0, 5.9, 8.4, 16.0],
-        [1.0, 5.2, 5.3, 8.2, 16.4]]),
-    ('Nitrate (gap size 3)', [
-        [1.0, 1.6, 3.6, 3.5, 4.7],
-        [1.1, 0.9, 2.8, 2.1, 3.1],
-        [1.1, 2.4, 6.8, 2.2, 3.0]]),
-    ('Nitrate (gap size 6)', [
-        [1.4, 1.9, 5.6, 3.7, 12.5],
-        [1.4, 1.1, 5.3, 2.3, 12.1],
-        [2.5, 2.9, 9.3, 3.6, 16.7]])
+        ['SSIM', 'BRITS', 'M-RNN', 'EM', 'KNN'],
+        ('Water Level (gap size 3)', [
+            [2.0, 3.5, 9.9, 17.5, 19.8],
+            [2.2, 3.0, 9.5, 15.6, 19.2],
+            [1.8, 12.2, 10.2, 14.6, 17.1]]),
+        ('Water Level (gap size 6)', [
+            [1.2, 3.7, 7.5, 9.6, 15.9],
+            [1.3, 3.0, 5.9, 8.4, 16.0],
+            [1.0, 5.2, 5.3, 8.2, 16.4]]),
+        ('Nitrate (gap size 3)', [
+            [1.0, 1.6, 3.6, 3.5, 4.7],
+            [1.1, 0.9, 2.8, 2.1, 3.1],
+            [1.1, 2.4, 6.8, 2.2, 3.0]]),
+        ('Nitrate (gap size 6)', [
+            [1.4, 1.9, 5.6, 3.7, 12.5],
+            [1.4, 1.1, 5.3, 2.3, 12.1],
+            [2.5, 2.9, 9.3, 3.6, 16.7]])
     ]
     return data
 
@@ -172,19 +124,16 @@ if __name__ == '__main__':
                             subplot_kw=dict(projection='radar'))
     fig.subplots_adjust(wspace=0.25, hspace=0.20, top=0.85, bottom=0.05)
 
-
-
     # These are the "Tableau 20" colors as RGB.
     tableau20 = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),
-                (44, 160, 44), (152, 223, 138), (214, 39, 40), (255, 152, 150),
-                (148, 103, 189), (197, 176, 213), (140, 86, 75), (196, 156, 148),
-                (227, 119, 194), (247, 182, 210), (127, 127, 127), (199, 199, 199),
-                (188, 189, 34), (219, 219, 141), (23, 190, 207), (158, 218, 229)]
+                 (44, 160, 44), (152, 223, 138), (214, 39, 40), (255, 152, 150),
+                 (148, 103, 189), (197, 176, 213), (140, 86, 75), (196, 156, 148),
+                 (227, 119, 194), (247, 182, 210), (127, 127, 127), (199, 199, 199),
+                 (188, 189, 34), (219, 219, 141), (23, 190, 207), (158, 218, 229)]
     # Scale the RGB values to the [0, 1] range, which is the format matplotlib accepts.
     for i in range(len(tableau20)):
         r, g, b = tableau20[i]
         tableau20[i] = (r / 255., g / 255., b / 255.)
-
 
     # colors = ['b', 'r', 'g']
     colors = [tableau20[8], tableau20[4], tableau20[6]]

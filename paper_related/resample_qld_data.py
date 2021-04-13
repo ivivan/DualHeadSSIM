@@ -33,10 +33,10 @@ def data_together(filepath):
     return dfs, csvs
 
 
-
-def resampleCSV(df,filepath):
-    df['Timestamp'] = pd.to_datetime(df['Timestamp'],dayfirst=True)   ##use day first for GOV download csv
-    df.set_index('Timestamp',inplace=True)
+def resampleCSV(df, filepath):
+    # use day first for GOV download csv
+    df['Timestamp'] = pd.to_datetime(df['Timestamp'], dayfirst=True)
+    df.set_index('Timestamp', inplace=True)
     newcsv = df.resample('1H').mean()
     # interporation
     # newcsv = newcsv.interpolate(method='linear', axis=0)
@@ -44,18 +44,17 @@ def resampleCSV(df,filepath):
     filename, file_extension = os.path.splitext(filepath)
     # outputcsv = os.path.join(filedir, name + '_resample' + '.csv')
     outputcsv = os.path.join(filename + '_resample' + '.csv')
-    newcsv.to_csv(outputcsv,date_format='%Y-%m-%dT%H:%M:%S')
+    newcsv.to_csv(outputcsv, date_format='%Y-%m-%dT%H:%M:%S')
 
 
-
-def mergeSameStationList(dflist,filepath):
+def mergeSameStationList(dflist, filepath):
 
     newone = pd.merge(dflist[0], dflist[1], on='Timestamp', how='outer')
     remainlist = []
     for df in dflist[2:]:
         remainlist.append(df)
 
-    for i in range(0,len(remainlist)):
+    for i in range(0, len(remainlist)):
         newone = pd.merge(newone, remainlist[i], on='Timestamp', how='outer')
 
     # newone['Stationname'] = filedir[-1]
@@ -68,12 +67,10 @@ def mergeSameStationList(dflist,filepath):
     # output CSV
     filename, file_extension = os.path.splitext(filepath)
     outputcsv = os.path.join(filename + '_joined' + '.csv')
-    newone.to_csv(outputcsv,date_format='%Y-%m-%dT%H:%M:%S')
-
+    newone.to_csv(outputcsv, date_format='%Y-%m-%dT%H:%M:%S')
 
 
 if __name__ == '__main__':
-
 
     ### resample data ###
 
@@ -83,11 +80,10 @@ if __name__ == '__main__':
     #     resampleCSV(i,j)
 
     ### join variables ###
-    
-    datapath = r'C:\Users\ZHA244\Dropbox\DigiScape\DigiScape\SensorCloud\Data_Kaggle\resample_missingdata\Tully_River_Tully_Gorge_National_Park'
-    alldata,allpaths = data_together(datapath)
-    mergeSameStationList(alldata,datapath)
 
+    datapath = r'C:\Users\ZHA244\Dropbox\DigiScape\DigiScape\SensorCloud\Data_Kaggle\resample_missingdata\Tully_River_Tully_Gorge_National_Park'
+    alldata, allpaths = data_together(datapath)
+    mergeSameStationList(alldata, datapath)
 
     # statistics
 
@@ -107,17 +103,7 @@ if __name__ == '__main__':
     # print(df_all.describe())
 
 
-
-
-
-
-
-
-
-
-
-
-### geopandas
+# geopandas
 # path = r'C:\Users\ZHA244\Downloads\shapefile_site_2018'
 # df = geopandas.read_file(path)
 # print(df)
@@ -151,10 +137,3 @@ if __name__ == '__main__':
 #
 # for i in df_all:
 #     print(i.head(1))
-
-
-
-
-
-
-

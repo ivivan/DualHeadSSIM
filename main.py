@@ -1,27 +1,30 @@
+from tslearn.metrics import dtw, dtw_path
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
+from warmup_scheduler import GradualWarmupScheduler
+from utils.cyclic_scheduler import CyclicLRWithRestarts
+from utils.dilate_loss import dilate_loss
+from utils.adamw import AdamW
+from utils.metrics import RMSLE
+from utils.support import *
+from utils.prepare_QLD import test_qld_single_station
+from utils.early_stopping import EarlyStopping
+from models.DualHead_NoShare import Shared_Encoder, Cross_Attention, Decoder, DualSSIM
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
-import random, math, os, time
+import random
+import math
+import os
+import time
+from torch.optim.lr_scheduler import StepLR, ExponentialLR
 
 import numpy as np
 np.set_printoptions(threshold=np.inf)
-import pandas as pd
 
-from models.DualHead_NoShare import Shared_Encoder, Cross_Attention, Decoder, DualSSIM
-
-from utils.early_stopping import EarlyStopping
-from utils.prepare_IOWA_2Y import test_pm25_single_station
-from utils.support import *
-from utils.metrics import RMSLE
-
-from utils.adamw import AdamW
-from utils.dilate_loss import dilate_loss
-from utils.cyclic_scheduler import CyclicLRWithRestarts
-from warmup_scheduler import GradualWarmupScheduler
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import mean_squared_error
 
 # set the random seeds for reproducability
 SEED = 1234
@@ -33,7 +36,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def train(model, optimizer, criterion, X_train_left, X_train_right, y_train):
-
 
     iter_per_epoch = int(np.ceil(X_train_left.shape[0] * 1. / BATCH_SIZE))
     iter_losses = np.zeros(EPOCHS * iter_per_epoch)
@@ -75,22 +77,17 @@ def train_iteration(model, optimizer, criterion, clip, X_train_left,
     X_train_right_tensor = numpy_to_tvar(X_train_right)
     y_train_tensor = numpy_to_tvar(y_train)
 
-    output,atten = model(X_train_left_tensor, X_train_right_tensor, y_train_tensor)
+    output, atten = model(X_train_left_tensor,
+                          X_train_right_tensor, y_train_tensor)
 
-    # output = output.view(-1)
+    output = output.permute(1, 0, 2)
+    y_train_tensor = y_train_tensor.permute(1, 0, 2)
 
-    # y_train_tensor = y_train_tensor.view(-1)
+    loss_mse, loss_shape, loss_temporal = torch.tensor(
+        0), torch.tensor(0), torch.tensor(0)
 
-    print(output.size())
-    print(y_train_tensor.size())
-
-    loss_mse,loss_shape,loss_temporal = torch.tensor(0),torch.tensor(0),torch.tensor(0)
-
-    loss, loss_shape, loss_temporal = dilate_loss(y_train_tensor,output,1, 0.01, device)         
-
-    # loss = criterion(output, y_train_tensor)
-
-    print(loss.size())
+    loss, loss_shape, loss_temporal = dilate_loss(
+        y_train_tensor, output, 0.85, 0.01, device)
 
     loss.backward()
     torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
@@ -104,16 +101,16 @@ def train_iteration(model, optimizer, criterion, clip, X_train_left,
     return loss.item()
 
 
-### evaluate
+# evaluate
 
 
 def evaluate(model, criterion, X_test_left, X_test_right, y_test):
 
-
     epoch_loss = 0
     iter_per_epoch = int(np.ceil(X_test_left.shape[0] * 1. / BATCH_SIZE))
     iter_losses = np.zeros(EPOCHS * iter_per_epoch)
-    iter_multiloss = [np.zeros(EPOCHS * iter_per_epoch), np.zeros(EPOCHS * iter_per_epoch),np.zeros(EPOCHS * iter_per_epoch)]
+    iter_multiloss = [np.zeros(EPOCHS * iter_per_epoch), np.zeros(EPOCHS * iter_per_epoch),
+                      np.zeros(EPOCHS * iter_per_epoch), np.zeros(EPOCHS * iter_per_epoch)]
     perm_idx = np.random.permutation(X_test_left.shape[0])
 
     n_iter = 0
@@ -126,17 +123,18 @@ def evaluate(model, criterion, X_test_left, X_test_right, y_test):
             x_test_right_batch = np.take(X_test_right, batch_idx, axis=0)
             y_test_batch = np.take(y_test, batch_idx, axis=0)
 
-            loss, mae, rmsle, rmse = evaluate_iteration(model, criterion, x_test_left_batch,
-                                      x_test_right_batch, y_test_batch)
+            loss, mae, rmsle, rmse, loss_tdi = evaluate_iteration(model, criterion, x_test_left_batch,
+                                                                  x_test_right_batch, y_test_batch)
             iter_losses[t_i // BATCH_SIZE] = loss
             iter_multiloss[0][t_i // BATCH_SIZE] = mae
             iter_multiloss[1][t_i // BATCH_SIZE] = rmsle
             iter_multiloss[2][t_i // BATCH_SIZE] = rmse
+            iter_multiloss[3][t_i // BATCH_SIZE] = loss_tdi
 
             n_iter += 1
 
     return np.mean(iter_losses[range(0, iter_per_epoch)]), np.mean(iter_multiloss[0][range(0, iter_per_epoch)]), np.mean(
-        iter_multiloss[1][range(0, iter_per_epoch)]), np.mean(iter_multiloss[2][range(0, iter_per_epoch)])
+        iter_multiloss[1][range(0, iter_per_epoch)]), np.mean(iter_multiloss[2][range(0, iter_per_epoch)]), np.mean(iter_multiloss[3][range(0, iter_per_epoch)])
 
 
 def evaluate_iteration(model, criterion, X_test_left, X_test_right, y_test):
@@ -151,97 +149,106 @@ def evaluate_iteration(model, criterion, X_test_left, X_test_right, y_test):
 
     y_test_tensor = numpy_to_tvar(y_test)
 
-    output,atten = model(x_test_left_tensor, x_test_right_tensor, y_test_tensor, 0)
+    output, atten = model(x_test_left_tensor,
+                          x_test_right_tensor, y_test_tensor, 0)
 
-    # output = output.view(-1)
-    # y_test_tensor = y_test_tensor.view(-1)
+    loss = criterion(output, y_test_tensor)
+    loss_mse, loss_dtw, loss_tdi = 0, 0, 0
+    loss_mae, loss_RMSLE, loss_RMSE = 0, 0, 0
 
-    loss_mse,loss_shape,loss_temporal = torch.tensor(0),torch.tensor(0),torch.tensor(0)
+    for k in range(BATCH_SIZE):
+        target_k_cpu = y_test_tensor[:, k, 0:1].view(-1).detach().cpu().numpy()
+        output_k_cpu = output[:, k, 0:1].view(-1).detach().cpu().numpy()
 
-    loss, loss_shape, loss_temporal = dilate_loss(y_test_tensor,output,1, 0.01, device)           
+        loss_dtw += dtw(target_k_cpu, output_k_cpu)
+        path, sim = dtw_path(target_k_cpu, output_k_cpu)
 
-    # loss = criterion(output, y_test_tensor)
+        Dist = 0
+        for i, j in path:
+            Dist += (i-j)*(i-j)
+        loss_tdi += Dist / (N_output*N_output)
 
+        loss_mae += mean_absolute_error(target_k_cpu, output_k_cpu)
+        loss_RMSLE += np.sqrt(mean_squared_error(target_k_cpu, output_k_cpu))
+        loss_RMSE += np.sqrt(mean_squared_error(target_k_cpu, output_k_cpu))
 
-    # metric
-    output_numpy = output.cpu().data.numpy()
-    y_test_numpy = y_test_tensor.cpu().data.numpy()
+    loss_dtw = loss_dtw / BATCH_SIZE
+    loss_tdi = loss_tdi / BATCH_SIZE
+    loss_mae = loss_mae / BATCH_SIZE
+    loss_RMSLE = loss_RMSLE / BATCH_SIZE
+    loss_RMSE = loss_RMSE / BATCH_SIZE
 
+    # # metric
+    # output_numpy = output.cpu().data.numpy()
+    # y_test_numpy = y_test_tensor.cpu().data.numpy()
 
-
-    # output_numpy = scaler_y.inverse_transform(output_numpy)
-    # y_test_numpy = scaler_y.inverse_transform(y_test_numpy)
-
-    loss_mae = mean_absolute_error(y_test_numpy,output_numpy)
-    loss_RMSLE = np.sqrt(mean_squared_error(y_test_numpy,output_numpy))
-    loss_RMSE = np.sqrt(mean_squared_error(y_test_numpy,output_numpy))
-
+    # loss_mae = mean_absolute_error(y_test_numpy,output_numpy)
+    # loss_RMSLE = np.sqrt(mean_squared_error(y_test_numpy,output_numpy))
+    # loss_RMSE = np.sqrt(mean_squared_error(y_test_numpy,output_numpy))
 
     # test_loss_meter.add(loss.item())
 
-    plot_result(output, y_test_tensor)
-    show_attention(x_test_left_tensor, x_test_right_tensor,output,atten)
-    plt.show()
+    # plot_result(output, y_test_tensor)
+    # show_attention(x_test_left_tensor, x_test_right_tensor,output,atten)
+    # plt.show()
 
-    return loss.item(), loss_mae, loss_RMSLE, loss_RMSE
+    return loss.item(), loss_mae, loss_RMSLE, loss_RMSE, loss_dtw
 
 
-def predict_ts(model, X_test_left, X_test_right, scaler_y, max_gap_size=6, BATCH_SIZE=1,device=device):
+def predict_ts(model, X_test_left, X_test_right, scaler_y, max_gap_size=6, BATCH_SIZE=1, device=device):
     model.eval()
 
     with torch.no_grad():
 
-            x_test_left = np.transpose(X_test_left, [1, 0, 2])
-            x_test_right = np.transpose(X_test_right, [1, 0, 2])
+        x_test_left = np.transpose(X_test_left, [1, 0, 2])
+        x_test_right = np.transpose(X_test_right, [1, 0, 2])
 
-            empty_y_tensor = torch.zeros(max_gap_size, BATCH_SIZE,
+        empty_y_tensor = torch.zeros(max_gap_size, BATCH_SIZE,
                                      1).to(device)
 
-            x_test_left_tensor = numpy_to_tvar(x_test_left)
-            x_test_right_tensor = numpy_to_tvar(x_test_right)
+        x_test_left_tensor = numpy_to_tvar(x_test_left)
+        x_test_right_tensor = numpy_to_tvar(x_test_right)
 
-            output = model(x_test_left_tensor, x_test_right_tensor, empty_y_tensor, 0)
-            output = output.view(-1)
+        output, _ = model(x_test_left_tensor,
+                          x_test_right_tensor, empty_y_tensor, 0)
 
-            # scalar
-            output_numpy = output.cpu().data.numpy()
-            output_numpy_origin = scaler_y.inverse_transform(
+        output = torch.squeeze(output)
+        output = torch.transpose(output, 0, 1)
+        output = torch.flatten(output)
+
+        # scalar
+        output_numpy = output.cpu().data.numpy()
+        output_numpy_origin = scaler_y.inverse_transform(
             output_numpy.reshape(-1, 1))
 
     return output_numpy_origin, output_numpy
 
 
-
-
-
-
 if __name__ == "__main__":
 
     # model hyperparameters
-    INPUT_DIM = 5
+    INPUT_DIM = 6
     OUTPUT_DIM = 1
     ENC_HID_DIM = 50
     DEC_HID_DIM = 50
-    ENC_DROPOUT = 0
-    DEC_DROPOUT = 0
+    ENC_DROPOUT = 0.1
+    DEC_DROPOUT = 0.1
     ECN_Layers = 1
     DEC_Layers = 1
     LR = 0.001  # learning rate
     CLIP = 1
     EPOCHS = 500
-    BATCH_SIZE = 20
+    BATCH_SIZE = 1
+    N_output = 3
 
+    # Different test data
 
-
-    ## Different test data
-
-    (x_train, y_train), (x_test, y_test), (scaler_x, scaler_y) = test_pm25_single_station()
-
-
+    (x_train, y_train), (x_test, y_test), (scaler_x,
+                                           scaler_y) = test_qld_single_station()
 
     print('split train/test array')
-    x_test_list = np.split(x_test, [12, 18], axis=1)
-    x_train_list = np.split(x_train, [12, 18], axis=1)
+    x_test_list = np.split(x_test, [10, 13], axis=1)
+    x_train_list = np.split(x_train, [10, 13], axis=1)
 
     # Split input into two
 
@@ -255,13 +262,11 @@ if __name__ == "__main__":
     print('X_test_left:{}'.format(X_test_left.shape))
     print('X_test_right:{}'.format(X_test_right.shape))
 
-    # # fit for batchsize  check dataloader droplast
-    # X_train_left = X_train_left[:3200]
-    # X_train_right = X_train_right[:3200]
-    # X_test_left = X_test_left[:680]
-    # X_test_right = X_test_right[:680]
-
-
+    # fit for batchsize  check dataloader droplast
+    X_train_left = X_train_left[:]
+    X_train_right = X_train_right[:]
+    # X_test_left = X_test_left[:2180]
+    # X_test_right = X_test_right[:2180]
 
     # Model
     cross_attn = Cross_Attention(ENC_HID_DIM, DEC_HID_DIM)
@@ -286,13 +291,12 @@ if __name__ == "__main__":
     # scheduler = CyclicLRWithRestarts(optimizer, BATCH_SIZE, 3202, restart_period=5, t_mult=1.2, policy="cosine")
 
     # warmup
-    scheduler_cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, EPOCHS)
-    scheduler_warmup = GradualWarmupScheduler(optimizer, multiplier=8, total_epoch=10, after_scheduler=scheduler_cosine)
+    # scheduler_cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, EPOCHS)
+    scheduler_steplr = StepLR(optimizer, step_size=10, gamma=0.1)
+    scheduler_warmup = GradualWarmupScheduler(
+        optimizer, multiplier=1, total_epoch=5)
 
     criterion = nn.MSELoss()
-
-
-
 
     # # visulization visdom
     # vis = Visualizer(env='attention')
@@ -303,28 +307,30 @@ if __name__ == "__main__":
     # initialize the early_stopping object
     # early stopping patience; how long to wait after last time validation loss improved.
     patience = 10
-    early_stopping = EarlyStopping(output_path='checkpoints/bestmodel.pt',
+    early_stopping = EarlyStopping(output_path='checkpoints/Nitrate6_0103.pt',
                                    patience=patience,
                                    verbose=True)
 
-    best_valid_loss = float('inf')
-    for epoch in range(EPOCHS):
+    optimizer.zero_grad()
+    optimizer.step()
 
-        scheduler_warmup.step()
-        train_epoch_losses = np.zeros(EPOCHS)
-        evaluate_epoch_losses = np.zeros(EPOCHS)
-        # loss_meter.reset()
+    ###################### training ###################
+    # best_valid_loss = float('inf')
+    # for epoch in range(EPOCHS):
 
-        # print('Epoch:', epoch, 'LR:', scheduler.get_lr())
+    #     scheduler_warmup.step(epoch)
+    #     train_epoch_losses = np.zeros(EPOCHS)
+    #     evaluate_epoch_losses = np.zeros(EPOCHS)
+    #     # loss_meter.reset()
 
-        start_time = time.time()
-        train_loss = train(model, optimizer, criterion, X_train_left,
-                           X_train_right, y_train)
-        valid_loss,test_mae, test_rmsle, test_rmse = evaluate(model, criterion, X_test_left, X_test_right,
-                              y_test)
-        end_time = time.time()
+    #     # print('Epoch:', epoch, 'LR:', scheduler.get_lr())
 
-        
+    #     start_time = time.time()
+    #     train_loss = train(model, optimizer, criterion, X_train_left,
+    #                        X_train_right, y_train)
+    #     valid_loss,test_mae, test_rmsle, test_rmse, test_tdi = evaluate(model, criterion, X_test_left, X_test_right,
+    #                           y_test)
+    #     end_time = time.time()
 
     #     # # visulization
     #     # vis.plot_many_stack({'train_loss': loss_meter.value()[0], 'test_loss': test_loss_meter.value()[0]})
@@ -352,6 +358,7 @@ if __name__ == "__main__":
     #     print(f'| MAE: {test_mae:.4f} | Test PPL: {math.exp(test_mae):7.4f} |')
     #     print(f'| RMSLE: {test_rmsle:.4f} | Test PPL: {math.exp(test_rmsle):7.4f} |')
     #     print(f'| RMSE: {test_rmse:.4f} | Test PPL: {math.exp(test_rmse):7.4f} |')
+    #     print(f'| TDI: {test_tdi:.4f} | Test PPL: {math.exp(test_tdi):7.4f} |')
 
     # # # prediction
 
@@ -359,37 +366,85 @@ if __name__ == "__main__":
     # X_test_left = X_test_left[5:6,:,:]
     # X_test_right = X_test_right[5:6,:,:]
     # y_test = y_test[5:6,:,:]
-    
-    # model.load_state_dict(torch.load('checkpoints/bestmodel.pt'))
-    
-    # test_loss, test_mae, test_rmsle, test_rmse  = evaluate(model, criterion, X_test_left,X_test_right, y_test)
-    
-    
-    # print(f'| Test Loss: {test_loss:.4f} | Test PPL: {math.exp(test_loss):7.4f} |')
-    # print(f'| MAE: {test_mae:.4f} | Test PPL: {math.exp(test_mae):7.4f} |')
-    # print(f'| RMSLE: {test_rmsle:.4f} | Test PPL: {math.exp(test_rmsle):7.4f} |')
-    # print(f'| RMSE: {test_rmse:.4f} | Test PPL: {math.exp(test_rmse):7.4f} |')
 
+    ####### load and evaluate ####################
 
+    model.load_state_dict(torch.load('checkpoints/level3_1012.pt'))
 
-    # # get one sample for test
-    # X_test_left = X_test_left[10:11,:,:]
-    # X_test_right = X_test_right[10:11,:,:]
-    # y_test = y_test[10:11,:,:]
-    # print(X_test_left.shape)
-    # print(X_test_right.shape)
-    # print(y_test.shape)
+    test_loss, test_mae, test_rmsle, test_rmse, test_tdi = evaluate(
+        model, criterion, X_test_left, X_test_right, y_test)
 
-    # outputs_ori, outputs_scal = predict_ts(model, X_test_left, X_test_right, scaler_y, max_gap_size=6, BATCH_SIZE=1,device=device)
-    # print('*************')
-    # X_test_left = scaler_x.inverse_transform(X_test_left[0])
-    # X_test_right = scaler_x.inverse_transform(X_test_right[0])
-    # y_test = scaler_y.inverse_transform(y_test.reshape(1,-1))
-    # print(X_test_left[:,3])
-    # print(X_test_right[:,3])
-    # print(y_test[0])
+    print(
+        f'| Test Loss: {test_loss:.4f} | Test PPL: {math.exp(test_loss):7.4f} |')
+    print(f'| MAE: {test_mae:.4f} | Test PPL: {math.exp(test_mae):7.4f} |')
+    print(
+        f'| RMSLE: {test_rmsle:.4f} | Test PPL: {math.exp(test_rmsle):7.4f} |')
+    print(f'| RMSE: {test_rmse:.4f} | Test PPL: {math.exp(test_rmse):7.4f} |')
+    print(f'| DTW: {test_tdi:.4f} | Test PPL: {math.exp(test_tdi):7.4f} |')
 
-    # print('*************')
-    # print('outputs_ori:{}'.format(outputs_ori))
-    # print('*************')
-    # print('outputs_scal:{}'.format(outputs_scal))
+    ######## check imputation value #######
+
+    outputs_ori, outputs_scal = predict_ts(
+        model, X_test_left, X_test_right, scaler_y, max_gap_size=3, BATCH_SIZE=1, device=device)
+
+    print('*************')
+    print('outputs_ori:{}'.format(outputs_ori.shape))
+    print('*************')
+    print('outputs_scal:{}'.format(outputs_scal.shape))
+
+    np.save('./results/{}_ori'.format('level_1012'), outputs_ori)
+    np.save('./results/{}_scal'.format('level_1012'), outputs_scal)
+
+    # ######### loop plot test data ###############
+
+    # # for i in range(0,X_test_left.shape[0]):
+    # for i in range(0,1):
+
+    #     X_test_left_pick = X_test_left[i,:,:]
+    #     X_test_right_pick = X_test_right[i,:,:]
+    #     y_test_pick = y_test[i,:,:]
+
+    #     X_test_left_pick = np.expand_dims(X_test_left_pick, axis=0)
+    #     X_test_right_pick = np.expand_dims(X_test_right_pick, axis=0)
+    #     y_test_pick = np.expand_dims(y_test_pick, axis=0)
+
+    #     print(X_test_left_pick.shape)
+    #     print(X_test_right_pick.shape)
+    #     print(y_test_pick.shape)
+
+    #     outputs_ori, outputs_scal = predict_ts(model, X_test_left_pick, X_test_right_pick, scaler_y, max_gap_size=3, BATCH_SIZE=1,device=device)
+    #     print('*************')
+    #     X_test_left_pick = scaler_x.inverse_transform(X_test_left_pick[0])
+    #     X_test_right_pick = scaler_x.inverse_transform(X_test_right_pick[0])
+    #     y_test_pick = scaler_y.inverse_transform(y_test_pick.reshape(1,-1))
+
+    #     print(X_test_left_pick[:,2])
+    #     print(X_test_right_pick[:,2])
+    #     print(y_test_pick[0])
+
+    #     print('*************')
+    #     print('outputs_ori:{}'.format(outputs_ori))
+    #     print('*************')
+    #     print('outputs_scal:{}'.format(outputs_scal))
+
+    #     outputs_ori = [item for sublist in outputs_ori for item in sublist]
+
+    #     list_before = X_test_left_pick[:,2].tolist()
+    #     list_middle = y_test_pick[0].tolist()
+    #     list_after = X_test_right_pick[:,2].tolist()
+
+    #     print('outputs_ori:{}'.format(outputs_ori))
+
+    #     ori_list = list_before + list_middle + list_after
+    #     pred_list = list_before + outputs_ori + list_after
+
+    #     x = np.arange(len(ori_list))
+
+    #     plt.figure()
+    #     # plt.plot(pred_list, label='Predicted')
+    #     # plt.plot(ori_list, label="True")
+    #     plt.scatter(x, pred_list, label='Predicted')
+    #     plt.scatter(x, ori_list, label="True")
+    #     plt.legend(loc='upper left')
+    #     plt.show()
+    #     # plt.pause(0.0001)
