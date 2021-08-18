@@ -60,7 +60,7 @@ def preprocess_df(df):
     df.drop(['Dayofweek'], axis=1, inplace=True)
     df.drop(['Month'], axis=1, inplace=True)
 
-    tw = df['Level'].values.copy().reshape(-1, 1)
+    tw = df['NO3'].values.copy().reshape(-1, 1)
 
     # Standlization, use StandardScaler
     scaler_x = MinMaxScaler()
@@ -98,7 +98,7 @@ def train_val_test_generate(dataframe, model_params):
     '''
 
     train_val_test_x, train_val_test_y, len_x_samples, len_before_x_samples = pad_all_cases(
-        dataframe, dataframe['Level'].values, model_params,
+        dataframe, dataframe['NO3'].values, model_params,
         model_params['min_before'], model_params['max_before'],
         model_params['min_after'], model_params['max_after'],
         model_params['output_length'])
@@ -157,7 +157,7 @@ def train_test_split_SSIM(x, y, x_len, x_before_len, model_params, SEED):
 def test_qld_single_station():
     train_sampling_params = {
         'dim_in': 6,
-        'output_length': 3,
+        'output_length': 6,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -167,7 +167,7 @@ def test_qld_single_station():
 
     test_sampling_params = {
         'dim_in': 6,
-        'output_length': 3,
+        'output_length': 6,
         'min_before': 10,
         'max_before': 10,
         'min_after': 10,
@@ -243,8 +243,8 @@ def test_qld_single_station():
     print('y_test:{}'.format(y_test.shape))
 
     print('split train/test array')
-    x_test_list = np.split(x_test, [10, 13], axis=1)
-    x_train_list = np.split(x_train, [10, 13], axis=1)
+    x_test_list = np.split(x_test, [10, 16], axis=1)
+    x_train_list = np.split(x_train, [10, 16], axis=1)
 
     for i in x_test_list:
         print(i.shape)

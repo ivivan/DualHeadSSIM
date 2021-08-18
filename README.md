@@ -2,7 +2,8 @@
 
 Dual-Head SSIM model. This is the improved SSIM model with two GRU encoders.
 
-YiFan Zhang and Peter Thorburn. A Dual-Head Attention Model for Time Series Data Imputation (Submitted to Computers and Electronics in Agriculture)
+YiFan Zhang and Peter Thorburn. [A Dual-Head Attention Model for Time Series Data Imputation](https://www.sciencedirect.com/science/article/pii/S016816992100394X), Volume 189, 2021, 106377, ISSN 0168-1699, Computers and Electronics in Agriculture.
+
 
 
 ## Code Structure

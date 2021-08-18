@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
     # Default Parameters
     model_params = {
-        'output_length': 3,
+        'output_length': 6,
         'before': 10,
         'after': 10
     }
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         complete_before = df.iloc[i:i+model_params['before'], :]
         complete_middle = df.iloc[i+model_params['before']:i +
                                   model_params['before']+model_params['output_length'], :]
-        complete_after = df.iloc[i+model_params['before']+model_params['output_length']                                 :i+model_params['output_length']+model_params['before']+model_params['after'], :]
+        complete_after = df.iloc[i+model_params['before']+model_params['output_length']:i+model_params['output_length']+model_params['before']+model_params['after'], :]
 
         incomplete_middle = complete_middle.copy()
         incomplete_middle[:] = np.nan
@@ -169,8 +169,8 @@ if __name__ == "__main__":
 
         # ##impulation
         # ## KNN
-        filled = impyute.imputation.cs.fast_knn(
-            incomplete_matrix, k=10)  # impyute implement
+        # filled = impyute.imputation.cs.fast_knn(
+        #     incomplete_matrix, k=10)  # impyute implement
 
         # ## EM
         # filled = impyute.imputation.cs.em(incomplete_matrix,loops=1000)
@@ -185,9 +185,9 @@ if __name__ == "__main__":
         # filled = impyute.imputation.ts.locf(incomplete_matrix,axis=1)
 
         # ## Linear
-        # incomplete_dataframe = pd.DataFrame(incomplete_matrix)
-        # incomplete_dataframe = incomplete_dataframe.interpolate(method='linear')
-        # filled = incomplete_dataframe.to_numpy()
+        incomplete_dataframe = pd.DataFrame(incomplete_matrix)
+        incomplete_dataframe = incomplete_dataframe.interpolate(method='linear')
+        filled = incomplete_dataframe.to_numpy()
 
         pred = filled[model_params['before']:model_params['before']+model_params['output_length'], 2]
 
@@ -223,8 +223,8 @@ if __name__ == "__main__":
 
     # ######### save imputation values #############
 
-    # predictions_saved = np.asarray(predictions)
-    # np.save('./results/{}_outputs_scal'.format('knn_NO3_1012'), predictions_saved)
+    predictions_saved = np.asarray(predictions)
+    np.save('./results/{}_outputs_scal'.format('Linear_Nitrate6_1012'), predictions_saved)
 
     print(len(predictions))
     print(len(obs))

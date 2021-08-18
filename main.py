@@ -239,7 +239,7 @@ if __name__ == "__main__":
     CLIP = 1
     EPOCHS = 500
     BATCH_SIZE = 1
-    N_output = 3
+    N_output = 6
 
     # Different test data
 
@@ -247,8 +247,8 @@ if __name__ == "__main__":
                                            scaler_y) = test_qld_single_station()
 
     print('split train/test array')
-    x_test_list = np.split(x_test, [10, 13], axis=1)
-    x_train_list = np.split(x_train, [10, 13], axis=1)
+    x_test_list = np.split(x_test, [10, 16], axis=1)
+    x_train_list = np.split(x_train, [10, 16], axis=1)
 
     # Split input into two
 
@@ -369,7 +369,7 @@ if __name__ == "__main__":
 
     ####### load and evaluate ####################
 
-    model.load_state_dict(torch.load('checkpoints/level3_1012.pt'))
+    model.load_state_dict(torch.load('checkpoints/Nitrate6_1012.pt'))
 
     test_loss, test_mae, test_rmsle, test_rmse, test_tdi = evaluate(
         model, criterion, X_test_left, X_test_right, y_test)
@@ -385,15 +385,15 @@ if __name__ == "__main__":
     ######## check imputation value #######
 
     outputs_ori, outputs_scal = predict_ts(
-        model, X_test_left, X_test_right, scaler_y, max_gap_size=3, BATCH_SIZE=1, device=device)
+        model, X_test_left, X_test_right, scaler_y, max_gap_size=6, BATCH_SIZE=1, device=device)
 
     print('*************')
     print('outputs_ori:{}'.format(outputs_ori.shape))
     print('*************')
     print('outputs_scal:{}'.format(outputs_scal.shape))
 
-    np.save('./results/{}_ori'.format('level_1012'), outputs_ori)
-    np.save('./results/{}_scal'.format('level_1012'), outputs_scal)
+    np.save('./results/{}_ori'.format('Nitrate6_1012'), outputs_ori)
+    np.save('./results/{}_scal'.format('Nitrate6_1012'), outputs_scal)
 
     # ######### loop plot test data ###############
 

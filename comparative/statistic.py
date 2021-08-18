@@ -2,7 +2,7 @@ import numpy as np
 
 
 
-arr = np.array([0.463746956598745,0.16796174882922])
+arr = np.array([0.3276,0.0258])
 
 print('mean:{}'.format(np.mean(arr, axis=0)))
 
