@@ -184,7 +184,7 @@ if __name__ == "__main__":
         # ## LOCF
         # filled = impyute.imputation.ts.locf(incomplete_matrix,axis=1)
 
-        # ## Linear
+        ## Linear
         incomplete_dataframe = pd.DataFrame(incomplete_matrix)
         incomplete_dataframe = incomplete_dataframe.interpolate(method='linear')
         filled = incomplete_dataframe.to_numpy()
